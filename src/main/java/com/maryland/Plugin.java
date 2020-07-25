@@ -22,7 +22,7 @@ import java.util.stream.Stream;
 
 public abstract class Plugin {
 
-    private final Map<Class<?>, Collection<Consumer<Object>>> eventmap = new Object2ObjectRBTreeMap<>();
+    private final Map<Class<?>, Collection<Consumer<Object>>> eventmap = new HashMap<>();
 
     protected Plugin() throws Error {
         if (this.getClass().getClassLoader().getClass() != Plugin.ClassLoader.class) throw new InstantiationError();
@@ -41,7 +41,10 @@ public abstract class Plugin {
         Objects.requireNonNull(event);
 
         new InheritanceIterator(event).forEachRemaining(class_ -> {
-            this.eventmap.getOrDefault(class_, Collections.emptyList()).forEach(consumer -> consumer.accept(event));
+            final Collection<Consumer<Object>> consumers = this.eventmap.get(class_);
+            if (consumers != null) {
+                consumers.forEach(consumer -> consumer.accept(event));
+            }
         });
     }
 
@@ -219,9 +222,11 @@ public abstract class Plugin {
         }
 
         public Class<?> define(final String name, final byte[] bytes) {
-            final Class<?> class__ = this.classmap.get(name);
-            if (class__ != null) {
-                return class__;
+            if (name != null) {
+                final Class<?> class__ = this.classmap.get(name);
+                if (class__ != null) {
+                    return class__;
+                }
             }
             final Class<?> class_ = this.defineClass(name, bytes, 0, bytes.length);
             this.classmap.put(class_.getName(), class_);
@@ -319,7 +324,8 @@ public abstract class Plugin {
 
         private static String getDescriptor(final Class<?> returnType, final Class<?> type) {
             final String returnTypeName = denormalize(returnType.getName());
-            return "(" + ("V".equals(returnTypeName) ? "" : returnTypeName) + ")" + denormalize(type.getName());
+            final String typeName = denormalize(type.getName());
+            return "(" + ("V".equals(typeName) ? "" : typeName) + ")" + returnTypeName;
         }
 
         private static String denormalize(final String typeName) {
