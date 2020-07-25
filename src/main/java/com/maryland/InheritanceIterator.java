@@ -2,7 +2,7 @@ package com.maryland;
 
 import java.util.Iterator;
 
-public final class InheritanceIterator implements Iterator<Class<?>> {
+final class InheritanceIterator implements Iterator<Class<?>> {
 
     private Class<?> class_;
     public InheritanceIterator(final Object object) {

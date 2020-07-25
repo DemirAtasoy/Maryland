@@ -14,7 +14,7 @@ import java.util.Optional;
  *
  *  Use {@link #of(File)} or {@link #of(byte[])} to retrieve the Signature of a file or array of bytes.
  */
-public final class Signature {
+final class Signature {
 
     public static final Signature ARCHIVE = new Signature(0x504B0304);
     public static final Signature CLASS = new Signature(0xCAFEBABE);
