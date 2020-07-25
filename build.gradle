@@ -1,0 +1,27 @@
+plugins {
+    id 'java'
+}
+
+group 'com.maryland'
+version '0.1.0'
+
+sourceCompatibility = 1.8
+
+allprojects {
+    repositories {
+        mavenCentral()
+        jcenter()
+        maven { url "https://jitpack.io" }
+    }
+}
+
+dependencies {
+    testCompile group: 'junit', name: 'junit', version: '4.12'
+
+    implementation 'org.ow2.asm:asm:9.0-beta'
+    implementation 'org.ow2.asm:asm-tree:9.0-beta'
+
+    implementation 'net.lingala.zip4j:zip4j:2.6.1'
+    implementation 'it.unimi.dsi:fastutil:8.3.0'
+    implementation 'com.github.DemirAtasoy:Configurable:v0.1.4'
+}
