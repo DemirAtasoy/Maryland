@@ -40,7 +40,7 @@ public abstract class Plugin {
          */
         Objects.requireNonNull(event);
 
-        new InheritanceIterator(event).forEachRemaining(class_ -> {
+        new InheritanceIterator(event.getClass()).forEachRemaining(class_ -> {
             final Collection<Consumer<Object>> consumers = this.eventmap.get(class_);
             if (consumers != null) {
                 consumers.forEach(consumer -> consumer.accept(event));
