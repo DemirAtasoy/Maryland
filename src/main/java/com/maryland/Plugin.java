@@ -20,18 +20,59 @@ import java.util.logging.Level;
 import java.util.stream.Collectors;
 import java.util.stream.Stream;
 
+/** The <code>Plugin</code> class represents plugins that have been loaded into the JVM from a JAR archive.
+ *  An instance of the <code>Plugin</code> class acts as an interface through which the application can interface
+ *  with the plugin.<br><br>
+ *
+ *  Instances of this class are initialized with the {@link #load(Path...)} or associated method.<br><br>
+ *
+ *  Plugin archives must possess the following properties to be properly handled by Maryland;
+ *  <ul>
+ *      <li>Comprising a valid JAR archive with a .jar file extension</li>
+ *      <li>Allowed to be opened for reading by the current process</li>
+ *      <li>Containing only class files which are in the proper format and able to be parsed by the classloader</li>
+ *  </ul>
+ *  <br>
+ *  The primary method of interfacing with a <code>Plugin</code> is through posting of events, which are dispatched
+ *  to methods denoted by the plugin to receive events of that type by an annotation (default {@link Subscribe}).
+ *  See {@link 	#post(Object)} for more information on event dispatching. <br><br>
+ *
+ */
 public abstract class Plugin {
 
     private final Map<Class<?>, Collection<Consumer<Object>>> eventmap = new HashMap<>();
 
+    /*
+     *  Instances of this class are generated and instantiated dynamically by Maryland.
+     *  This class must not be subclassed or instantiated manually
+     */
     protected Plugin() throws Error {
         if (this.getClass().getClassLoader().getClass() != Plugin.ClassLoader.class) throw new InstantiationError();
     }
 
+    /**
+     * Returns the Plugin's {@link UUID}
+     *
+     * @return The UUID of this Plugin
+     */
     public UUID getUUID() {
         return null;
     }
 
+    /**
+     *  Posts an event to this Plugin. The event will be received in an unspecified order by all valid Event Handlers
+     *  defined by the Plugin for which the posted event object is assignable.
+     *
+     *  An Event Handler is considered valid if and only if:
+     *  <ul>
+     *      <li>It is annotated with the {@link Subscribe} annotation</li>
+     *      <li>It is Static</li>
+     *      <li>It's visibility is Public</li>
+     *      <li>It accepts exactly one argument, which is not of a primitive or array type</li>
+     *  </ul>
+     *
+     * @param event The event to be posted
+     */
     public void post(final Object event) {
 
         /*
@@ -56,7 +97,85 @@ public abstract class Plugin {
         return Optional.empty();
     }
 
-    public static Plugin load(final Path file) throws IOException {
+    /**
+     * @see #load(Path...);
+     * @param files The files to be loaded
+     * @return A Collection containing {@link Plugin} instances for each plugin which could be loaded
+     */
+    public static Collection<Plugin> load(final File... files) {
+        Objects.requireNonNull(files);
+        Arrays.stream(files).forEach(Objects::requireNonNull);
+
+        final Path[] files_ = new Path[files.length];
+        for (int i = 0; i < files.length; i++) {
+            files_[i] = files[i].toPath();
+        }
+        return Plugin.load(files_);
+    }
+
+    /**
+     *  Recursively loads all JAR archives at or under the specified files into the JVM, performing as required
+     *  initialization subroutines for registering Event Handlers and other functionality
+     *  Returns a {@link Collection} containing {@link Plugin} handles for each loaded Plugin, which may be used to
+     *  interface with them as required.
+     *
+     *  A new {@link java.lang.ClassLoader} is created for each loaded Plugin, which is used to load its classes as well
+     *  as its associated {@link Plugin} handle object in the {@link Collection} returned by this method.
+     *  Classes loaded into the JVM by this method will become eligible for collection by the GC at the same time as
+     *  their associated {@link Plugin} object, provided no references are maintained to class(s) loaded by the Plugin's
+     *  ClassLoader
+     *
+     * @param files The list of files to be searched for Plugins
+     * @return A collection containing Plugin handles for each loaded plugin
+     */
+    public static Collection<Plugin> load(final Path... files) {
+        Objects.requireNonNull(files);
+        Arrays.stream(files).forEach(Objects::requireNonNull);
+
+        final Path[] files_ = new Path[files.length];
+        for(int i = 0; i < files.length; i++) {
+            files_[i] = files[i].normalize().toAbsolutePath();
+        }
+
+        final Collection<Path> archives = new HashSet<>();
+        for (final Path file : files_) {
+            if (!Files.exists(file)) {
+                Maryland.getLog().log(Level.WARNING, "Unable to find " + file.toString() + ": File does not exist");
+                continue;
+            }
+            final boolean isRegularFile = Files.isRegularFile(file);
+            final boolean isDirectory = Files.isDirectory(file);
+            if (!isRegularFile && isDirectory) {
+                try (final Stream<Path> stream = Files.walk(file)) {
+                    stream  .filter(file_ -> Files.exists(file_))
+                            .filter(file_ -> Files.isRegularFile(file_))
+                            .filter(file_ -> !Files.isDirectory(file_))
+                            .filter(file_ -> getFileExtension(file_).equalsIgnoreCase(".jar"))
+                            .forEach(archives::add);
+                }
+                catch (final IOException exception) {
+                    Maryland.getLog().log(Level.WARNING, exception.getMessage());
+                    continue;
+                }
+            }
+            if (isRegularFile && !isDirectory && getFileExtension(file).equalsIgnoreCase(".jar")) {
+                archives.add(file);
+            }
+        }
+
+        final Collection<Plugin> plugins = new ArrayList<>();
+        for (final Path archive : archives) {
+            try {
+                plugins.add(Plugin.load_(archive));
+            }
+            catch (final IOException exception) {
+                Maryland.getLog().log(Level.SEVERE, exception, () -> "");
+            }
+        }
+        return plugins;
+    }
+
+    private static Plugin load_(final Path file) throws IOException {
         Plugin.requireValidArchive(file);
         final Path file_ = file.normalize().toAbsolutePath();
 
@@ -305,9 +424,9 @@ public abstract class Plugin {
                 final Consumer<Object> consumer = (Consumer<Object>) this.define(bytes).newInstance();
                 this.asPlugin().eventmap.computeIfAbsent(type, class__ -> new ArrayList<>(4)).add(consumer);
             }
-
-            // TODO: Implement JAR Resources
         }
+
+        // TODO: Implement JAR Resources
 
         private static String toString(final Method method) {
             StringBuilder stringbuilder = new StringBuilder();
